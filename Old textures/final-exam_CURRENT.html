@@ -1,0 +1,191 @@
+<html>
+    <head>
+        <title>CSCI-610 - Final Exam</title>
+
+        <!-- vertex shader -->
+        <script id="vertexShader" type="x-shader/x-vertex">
+            #version 300 es
+            precision mediump float;
+            // using per-fragment shading
+
+            // inputs
+            in vec3 aVertexPosition;  // model coords
+            in vec3 aNormal;          // model coords
+            in vec2 aUV;
+
+            // uniform variables
+            uniform mat4 modelT;
+            uniform mat4 viewT;
+            uniform mat4 projT;
+            uniform vec3 lightPosition;  // world coords
+            uniform mat4 rotMatrix;      // just rotation for light position
+
+            // outputs to fragment shader
+            out vec2 theUV;
+            out vec3 V;
+            out vec3 L;
+            out vec3 N;
+
+            void main() {
+                // change to camera coords
+                mat4 modelView = viewT * modelT;
+                mat4 normalMatrix = transpose(inverse(modelView));
+
+                // maintain spatial relationship between light source and vertex
+                vec3 rotLightPOS = (rotMatrix * vec4(lightPosition, 1.0)).xyz;
+
+                vec3 vcam = (modelView * vec4(aVertexPosition, 1.0)).xyz;
+                vec3 lcam = (viewT * vec4(rotLightPOS, 1.0)).xyz;
+                vec3 ncam = (normalMatrix * vec4(aNormal, 1.0)).xyz;
+
+                ncam = faceforward(ncam, vcam, ncam);
+
+                V = -normalize(vcam);
+                L = normalize(lcam - vcam);
+                N = normalize(ncam);
+
+                theUV = aUV;
+                gl_Position = projT * viewT * modelT * vec4(aVertexPosition, 1.0);
+            }
+        </script>
+
+        <!-- fragment shader -->
+        <script id="fragmentShader" type="x-shader/x-fragment">
+            #version 300 es
+            precision mediump float;
+            // using per-fragment shading
+
+            in vec2 theUV;
+            in vec3 N;
+            in vec3 L;
+            in vec3 V;
+
+            // check value to use image or procedural texture
+            uniform int shadeCheck;
+            uniform int waterCheck;
+            uniform int wallCheck;
+
+            uniform sampler2D theTexture;
+            uniform vec3 ambientLight;
+            uniform vec3 lightColor;
+            uniform vec3 baseColor;
+            uniform vec3 specHighlightColor;
+            uniform float ka;
+            uniform float kd;
+            uniform float ks;
+            uniform float ke;
+
+            // Color that is the result of this shader
+            out vec4 fragColor;
+
+            void main(void) {
+                // do not render top half of water sphere
+                if (waterCheck == 2 && theUV.t > 0.5) {
+                    discard;
+                }
+
+                // if the object is a wall, do not add shading
+                if (wallCheck == 1) {
+                    fragColor = texture(theTexture, theUV);
+                // if shading is enabled or not
+                } else if (shadeCheck == 1) {
+                    vec3 R = normalize(reflect(-L, N));
+
+                    vec3 textureColor = texture(theTexture, theUV).xyz;
+
+                    vec3 ambient = ka * ambientLight * textureColor;
+                    vec3 diffuse = kd * lightColor * textureColor * max(dot(L, N), 0.0);
+                    vec3 spec = ks * specHighlightColor * lightColor * pow(max(dot(R, V), 0.0), ke);
+
+                    fragColor = vec4(ambient + diffuse + spec, 1.0);
+                    //fragColor = vec4(baseColor, 1.0);
+                } else {
+                    fragColor = texture(theTexture, theUV);
+                    //discard;
+                }
+            }
+        </script>
+
+        <!-- Matrix library and code for standard transformations -->
+        <script type="text/javascript" src="gl-matrix-min.js"></script>
+
+        <!-- include the main final functions -->
+        <script type="text/javascript" src="./finalMain.js"></script>
+
+        <!-- shape functions -->
+        <script type="text/javascript" src="./cgIShape.js"></script>
+        <script type="text/javascript" src="./myShapes-min.js"></script>
+        <script type="text/javascript" src="./moreShapes.js"></script>
+
+        <!-- keyboard functions -->
+        <script type="text/javascript" src="./event.js"></script>
+
+        <!-- texture images -->
+        <!-- Retrieved from https://svs.gsfc.nasa.gov/ -->
+        <img id="moon-texture" src="moon-texture.jpg" style="display: none;">
+        <!-- Retrieved from https://www.istockphoto.com/ -->
+        <img id="mountain1-texture" src="mountain1-texture.jpg" style="display: none;">
+        <!-- Retrieved from https://unsplash.com/ -->
+        <img id="mountain2-texture" src="mountain2-texture.jpg" style="display: none;">
+        <!-- Retrieved from https://www.istockphoto.com/ -->
+        <img id="mountain3-texture" src="mountain3-texture.jpg" style="display: none;">
+        <!-- Retrieved from https://thehungryjpeg.com/ -->
+        <img id="water-texture" src="water-texture.jpg" style="display: none;">
+        <!-- Retrieved from https://www.wallpaperflare.com/ -->
+        <img id="watertop-texture" src="watertop-texture.jpg" style="display: none;">
+        <!-- Retrieved from https://stock.adobe.com/ -->
+        <img id="party-texture" src="party-texture.jpg" style="display: none;">
+        <!-- Retrieved from https://www.vectorstock.com/ -->
+        <img id="alt-mount-texture" src="alt-mount-texture.jpg" style="display: none;">
+        <!-- Retrieved from https://www.nasa.gov/ -->
+        <img id="space-texture" src="space-texture.jpg" style="display: none;">
+
+        <script type="text/javascript">
+            // Call init once the webpage has loaded
+            window.onload = init;
+        </script>
+    </head>
+
+    <body>
+        <h1>CSCI-610: Final Exam Image</h1>
+        <table>
+            <tr>
+                <td><canvas id="webgl-canvas" width="750" height="750">
+                Your browser does not support the HTML5 canvas element.
+                </canvas></td>
+
+                <td>
+                <h3>Controls</h3>
+                <table border="1">
+                    <tbody>
+                        <tr>
+                            <td style="width: 50px; text-align: center"> v </td>
+                            <td style="width: 200px"> Toggle view mode </td>
+                        </tr>
+                        <tr>
+                            <td style="width: 50px; text-align: center"> l </td>
+                            <td style="width: 200px"> Toggle lighting </td>
+                        </tr>
+                        <tr>
+                            <td style="width: 50px; text-align: center"> p </td>
+                            <td style="width: 200px"> P is for party! </td>
+                        </tr>
+                        <tr>
+                            <td style="width: 50px; text-align: center"> x, y, z </td>
+                            <td style="width: 200px"> Rotate on corresponding axis (hold shift for reverse) </td>
+                        </tr>
+                        <tr>
+                            <td style="width: 50px; text-align: center"> a, d </td>
+                            <td style="width: 200px"> Pass the time </td>
+                        </tr>
+                        <tr>
+                            <td style="width: 50px; text-align: center"> r </td>
+                            <td style="width: 200px"> Reset view </td>
+                        </tr>
+                    </tbody>
+                </table>
+                </td>
+            </tr>
+        </table>
+    </body>
+</html>
